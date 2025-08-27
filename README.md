@@ -1,5 +1,5 @@
 This python app outputs transactions from monthly bank/credit statements into a csv.
-The statements have to be in the format of a PDF.
+Only supports a few credit types in its specific file format.
 
 csv schema:
 - credit_type
@@ -7,6 +7,9 @@ csv schema:
 - transaction_details
 - amount
 
-The different types of pdf statements it can read:
+The different types of pdfs it can read:
 - Chase
+
+The different types of csvs it can read:
+- American Express
 
