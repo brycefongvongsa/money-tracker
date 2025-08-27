@@ -1,18 +1,21 @@
+# from pandas.io.pytables import File
 import pymupdf4llm
 import pathlib
 import re
 import os
+import csv
 import pandas as pd
 from datetime import datetime
 
 # Turn the pdf into a markdown file
-def process_bank_statement(pdf_path):
+def pdf_to_md(pdf_path):
   md_text = pymupdf4llm.to_markdown(pdf_path)
   pathlib.Path("results/output.md").write_bytes(md_text.encode())
   return md_text
 
-# Parse the markdown file, return a list of transaction strings
-def parse_transactions(md_text):
+
+# Parse the markdown file to return a list of transactions
+def get_transaction_list(md_text) -> list:
   lines = md_text.split('\n') # Use passed text instead of reading file
   
   transactions = []
@@ -26,21 +29,21 @@ def parse_transactions(md_text):
       })
   return transactions
 
-def parse_credit_type(md_text):
-  lines = md_text.split('\n')
-  
-  credit_type = ""
-  for line in lines:
-    if re.search(r'chase\.com', line):
-      credit_type = "Chase"
-      break
-  
-  return credit_type
 
-# Breakdown the details from the transaction
-def extract_transaction_details(transaction_line, md_text):
+def get_credit_type(file: str) -> str:
+  filename = os.path.basename(file)
+  if "american express" in filename.lower():
+    return "American Express"
+  elif "chase" in filename.lower():
+    return "Chase"
+  else:
+    return "Unknown"
+
+
+def get_transaction_details_pdf(transaction_line, md_text) -> dict:
   parts = transaction_line.split()
   
+  # Chase specific
   if len(parts) >= 2:
     date = parts[0]
     merchant_parts = parts[1:-1]
@@ -48,48 +51,88 @@ def extract_transaction_details(transaction_line, md_text):
     amount = parts[-1]
     
     return {
-      'credit_type': parse_credit_type(md_text),
-      'date': date,
+      'credit_type': 'Chase',
+      'date': date, # TODO: make this date in yyyy-mm-dd format
       'merchant': merchant,
       'amount': amount
     }
   
   return None
+
+def get_transaction_details_csv(file) -> dict:
+  transactions = []
+  credit_type = get_credit_type(file)
+  
+  with open(file, 'r') as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+      transaction = {
+        'credit_type': credit_type,
+        'date': row['Date'],
+        'merchant': row['Description'],
+        'amount': row['Amount']
+      }
+      transactions.append(transaction)
+  return transactions
+ 
  
 def main():
-  # Get all PDF files
+  # Get all files
+  print("Beginning to load files")
   pdf_files = []
+  amex_files = []
+  
   for file in os.listdir("files/"):
     if file.endswith(".pdf"):
+      print(f"Found file: {file}")
       pdf_files.append(f"files/{file}")
+    if file.endswith(".csv") and get_credit_type(file) == "American Express":
+      print(f"Found file: {file}")
+      amex_files.append(f"files/{file}")
+  print("Finished loading files" + '\n' + '--------------')
   
-  # Process all PDF files and collect results
-  all_transactions = []
+  # Process all files and collect results
+  print("Beginning processing step")
+  pdf_transactions = []
+  amex_transactions = []
   
+  ## PDF processing
   for pdf_file in pdf_files:
     print(f"Processing: {pdf_file}")
-    md_text = process_bank_statement(pdf_file)
+    md_text = pdf_to_md(pdf_file)
     
     # Get the list of transactions
-    transaction_lines = parse_transactions(md_text)
+    transaction_lines = get_transaction_list(md_text)
     
     # Extract details from each transaction
-    for transaction in transaction_lines:
-      details = extract_transaction_details(transaction['content'], md_text)
-      if details:
-        all_transactions.append(details)
+    for t in transaction_lines:
+      t_details = get_transaction_details_pdf(t['content'], md_text)
+      if t_details:
+        pdf_transactions.append(t_details)
   
-  # Create DataFrame
+  ## Amex processing
+  for file in amex_files:
+    print(f"Processing: {file}")
+    amex_transactions.extend(get_transaction_details_csv(file))
+  
+  print("Processing step completed for all transactions in the files" + '\n' + '--------------')
+    
+  
+  # Combine transactions into a DataFrame
+  print("Combining all transactions")
+  all_transactions = pdf_transactions + amex_transactions
   df = pd.DataFrame(all_transactions)
-  
-  # Display results
-  print(df)
+  print("Combining step complete")
   
   # Save to CSV
+  print("Saving to csv")
   df.to_csv('results/transactions.csv', index=False)
+  print("Saving step complete")
   
   # Delete temporary outputs
+  print("Deleting temporary outputs")
   os.remove("results/output.md")
+  print("Deletion step complete")
   
   
 if __name__ == "__main__":

@@ -3,3 +3,5 @@ files/*
 !files/.gitkeep
 results/*
 !results/.gitkeep
+.pytest_cache/
+tests/__pycache__
