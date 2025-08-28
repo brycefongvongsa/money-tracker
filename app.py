@@ -1,4 +1,3 @@
-# from pandas.io.pytables import File
 import pymupdf4llm
 import pathlib
 import re
@@ -15,18 +14,19 @@ def pdf_to_md(pdf_path):
 
 
 # Parse the markdown file to return a list of transactions
-def get_transaction_list(md_text) -> list:
+def get_transaction_list(md_text, file) -> list:
   lines = md_text.split('\n') # Use passed text instead of reading file
   
   transactions = []
-  for line in lines:
-    line = line.strip()
-    # Look for lines that start with a date pattern (MM/DD)
-    # Chase: "01/02 AMAZON MKTPL*XXXX Amzn.com/bill WA 10.12"
-    if re.match(r'\d{2}/\d{2}\s', line):
-      transactions.append({
-        'content': line,
-      })
+  if get_credit_type(file) == "Chase":
+    for line in lines:
+      line = line.strip()
+      # Look for lines that start with a date pattern (MM/DD)
+      # Chase: "01/02 AMAZON MKTPL*XXXX Amzn.com/bill WA 10.12"
+      if re.match(r'\d{2}/\d{2}\s', line):
+        transactions.append({
+          'content': line,
+        })
   return transactions
 
 
@@ -40,7 +40,23 @@ def get_credit_type(file: str) -> str:
     return "Unknown"
 
 
-def get_transaction_details_pdf(transaction_line, md_text) -> dict:
+def get_year_of_statement(file):
+  filename = os.path.basename(file)
+  match = re.search(r'\d{4}', filename)
+  if match:
+    return int(match.group())
+  else:
+    raise Exception(f"Failed to extract year, expected 4 digits from {filename}")
+
+
+# Chase Statements only provides date in mm/dd, format it to mm/dd/yyyy
+def format_date(date_string, file):
+  year_in_statement = get_year_of_statement(file)
+  new_date_string = f"{date_string}/{year_in_statement}"
+  return new_date_string
+  
+
+def get_transaction_details_pdf(transaction_line, file) -> dict:
   parts = transaction_line.split()
   
   # Chase specific
@@ -52,7 +68,7 @@ def get_transaction_details_pdf(transaction_line, md_text) -> dict:
     
     return {
       'credit_type': 'Chase',
-      'date': date, # TODO: make this date in yyyy-mm-dd format
+      'date': format_date(date, file), # TODO: make this date in yyyy-mm-dd format
       'merchant': merchant,
       'amount': amount
     }
@@ -102,18 +118,18 @@ def main():
     md_text = pdf_to_md(pdf_file)
     
     # Get the list of transactions
-    transaction_lines = get_transaction_list(md_text)
+    transaction_lines = get_transaction_list(md_text, pdf_file)
     
     # Extract details from each transaction
     for t in transaction_lines:
-      t_details = get_transaction_details_pdf(t['content'], md_text)
+      t_details = get_transaction_details_pdf(t['content'], pdf_file)
       if t_details:
         pdf_transactions.append(t_details)
   
   ## Amex processing
-  for file in amex_files:
-    print(f"Processing: {file}")
-    amex_transactions.extend(get_transaction_details_csv(file))
+  for csv_file in amex_files:
+    print(f"Processing: {csv_file}")
+    amex_transactions.extend(get_transaction_details_csv(csv_file))
   
   print("Processing step completed for all transactions in the files" + '\n' + '--------------')
     
@@ -123,6 +139,12 @@ def main():
   all_transactions = pdf_transactions + amex_transactions
   df = pd.DataFrame(all_transactions)
   print("Combining step complete")
+  
+  # Transformation step
+  print("Transforming data")
+  # Convert to yyyy-mm-dd format.
+  df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+  print("Transformation complete")
   
   # Save to CSV
   print("Saving to csv")
