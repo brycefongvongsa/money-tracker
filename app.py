@@ -21,7 +21,7 @@ def get_transaction_list(md_text, file) -> list:
   if get_credit_type(file) == "Chase":
     for line in lines:
       line = line.strip()
-      # Look for lines that start with a date pattern (MM/DD)
+      # Looks for lines that start with a date pattern (MM/DD)
       # Chase: "01/02 AMAZON MKTPL*XXXX Amzn.com/bill WA 10.12"
       if re.match(r'\d{2}/\d{2}\s', line):
         transactions.append({
@@ -40,7 +40,7 @@ def get_credit_type(file: str) -> str:
     return "Unknown"
 
 
-def get_year_of_statement(file):
+def get_statement_year(file):
   filename = os.path.basename(file)
   match = re.search(r'\d{4}', filename)
   if match:
@@ -51,8 +51,8 @@ def get_year_of_statement(file):
 
 # Chase Statements only provides date in mm/dd, format it to mm/dd/yyyy
 def format_date(date_string, file):
-  year_in_statement = get_year_of_statement(file)
-  new_date_string = f"{date_string}/{year_in_statement}"
+  statement_year = get_statement_year(file)
+  new_date_string = f"{date_string}/{statement_year}"
   return new_date_string
   
 
@@ -60,7 +60,7 @@ def get_transaction_details_pdf(transaction_line, file) -> dict:
   parts = transaction_line.split()
   
   # Chase specific
-  if len(parts) >= 2:
+  if get_credit_type(file) == "Chase":
     date = parts[0]
     merchant_parts = parts[1:-1]
     merchant = ' '.join(merchant_parts)
@@ -152,9 +152,9 @@ def main():
   print("Saving step complete")
   
   # Delete temporary outputs
-  print("Deleting temporary outputs")
-  os.remove("results/output.md")
-  print("Deletion step complete")
+  # print("Deleting temporary outputs")
+  # os.remove("results/output.md")
+  # print("Deletion step complete")
   
   
 if __name__ == "__main__":

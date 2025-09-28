@@ -13,4 +13,4 @@ def test_get_credit_type_chase():
   
 def test_format_date():
   result = format_date("07/05", "Chase Statement Jul 5, 2025.pdf")
-  assert "07/05/2025" in str(result), "Date should be in mm/dd/yyyy" 
+  assert "07/05/2025" in str(result), "Date should be in mm-dd-yyyy" 

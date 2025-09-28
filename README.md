@@ -1,5 +1,5 @@
 This python app outputs transactions from monthly bank/credit statements into a csv.
-Only supports a few credit types in its specific file format.
+Currently, this supports a few credit types in specific file formats.
 
 csv schema:
 - credit_type
